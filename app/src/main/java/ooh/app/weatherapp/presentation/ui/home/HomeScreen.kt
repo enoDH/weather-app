@@ -1,26 +1,34 @@
 package ooh.app.weatherapp.presentation.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -29,8 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import ooh.app.weatherapp.presentation.ui.components.CityCurrentWeather
+import ooh.app.weatherapp.presentation.ui.components.CustomDialog
+import ooh.app.weatherapp.presentation.ui.components.WindDirectionIcon
 import ooh.app.weatherapp.presentation.viewmodel.HomeViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: HomeViewModel) {
     val uiState by viewModel.uiState.collectAsState()
@@ -38,11 +50,94 @@ fun HomeScreen(viewModel: HomeViewModel) {
     Column(
         modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            uiState.city, style = TextStyle(
-                color = Color.Black, fontSize = 32.sp
+        if (uiState.displayDialog) {
+            CustomDialog(onDismissRequest = { uiState.displayDialog }) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    var active by remember { mutableStateOf(false) }
+
+
+                    SearchBar(
+                        query = uiState.query,
+                        onQueryChange = { newQuery ->
+                            viewModel.changeQuery(newQuery)
+                        },
+                        onSearch = { newQuery ->
+                            active = false
+                        },
+                        active = active,
+                        onActiveChange = { active = it },
+                        placeholder = { Text("Search") },
+                    ) {
+                        if (uiState.hasSearchResult) {
+                            CityCurrentWeather(
+                                onClickCallback = viewModel::saveCity,
+                                btnText = "Add",
+                                cityName = uiState.search.location.name,
+                                icon = uiState.search.current.condition.icon,
+                                iconDescription = uiState.search.current.condition.text,
+                                tempC = uiState.search.current.tempC,
+                                windDir = uiState.search.current.windDir,
+                                windMph = uiState.search.current.windMph
+                            )
+
+
+                        } else if (uiState.query.isNotEmpty()) {
+                            Text("Searching...", modifier = Modifier.padding(16.dp))
+                        } else {
+                            Text("#_#", modifier = Modifier.padding(16.dp))
+                        }
+                    }
+
+                    if (uiState.citiesWeather.isNotEmpty()) {
+                        LazyColumn {
+                            items(uiState.citiesWeather) { item ->
+
+
+                                CityCurrentWeather(
+                                    onClickCallback = { viewModel.getCityWeather(item.location.name) },
+                                    btnText = "Show",
+                                    cityName = item.location.name,
+                                    icon = item.current.condition.icon,
+                                    iconDescription = item.current.condition.text,
+                                    tempC = item.current.tempC,
+                                    windDir = item.current.windDir,
+                                    windMph = item.current.windMph
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+
+            Text(
+                text = uiState.city, style = TextStyle(
+                    color = Color.Black, fontSize = 36.sp
+                ), modifier = Modifier.align(Alignment.Center)
             )
-        )
+
+            Icon(
+                imageVector = Icons.Outlined.Add,
+                contentDescription = "Add city",
+                modifier = Modifier
+                    .size(
+                        64.dp
+                    )
+                    .align(Alignment.CenterEnd)
+                    .padding(horizontal = 16.dp)
+                    .clickable(
+                        onClick = {
+                            viewModel.displayDialog()
+                        })
+            )
+        }
 
         Text(
             text = "${uiState.currentWeather.tempC}°C",
@@ -79,7 +174,8 @@ fun HomeScreen(viewModel: HomeViewModel) {
                 .background(color = Color.Green, shape = RoundedCornerShape(8.dp))
                 .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        )
+        {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(uiState.currentWeather.airQuality.co.toString())
                 Text("CO")
@@ -118,8 +214,7 @@ fun HomeScreen(viewModel: HomeViewModel) {
                         .width(200.dp)
                         .padding(4.dp)
                         .background(color = Color.Magenta, shape = RoundedCornerShape(8.dp))
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(item.date)
 
@@ -140,47 +235,4 @@ fun HomeScreen(viewModel: HomeViewModel) {
 
     }
 
-}
-
-
-@Composable
-fun WindDirectionIcon(
-    windDirection: String,
-    windDirectionText: String,
-    modifier: Modifier = Modifier,
-    tint: Color = Color.Gray
-) {
-    val rotationAngle = directionStringToDegrees(windDirection)
-
-    Icon(
-        imageVector = Icons.Filled.ArrowUpward,
-        contentDescription = windDirectionText,
-        tint = tint,
-        modifier = modifier.rotate(rotationAngle.toFloat())
-    )
-}
-
-
-fun directionStringToDegrees(direction: String): Double {
-    val normalizedDirection = direction.uppercase().trim()
-
-    return when (normalizedDirection) {
-        "N" -> 0.0
-        "NNE" -> 22.5
-        "NE" -> 45.0
-        "ENE" -> 67.5
-        "E" -> 90.0
-        "ESE" -> 112.5
-        "SE" -> 135.0
-        "SSE" -> 157.5
-        "S" -> 180.0
-        "SSW" -> 202.5
-        "SW" -> 225.0
-        "WSW" -> 247.5
-        "W" -> 270.0
-        "WNW" -> 292.5
-        "NW" -> 315.0
-        "NNW" -> 337.5
-        else -> 0.0
-    }
 }
