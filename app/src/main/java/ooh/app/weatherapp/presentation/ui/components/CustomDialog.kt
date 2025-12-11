@@ -40,7 +40,6 @@ fun CustomDialog(
                         color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(16.dp)
                     )
-                    .padding(24.dp)
             ) {
                 content()
             }
